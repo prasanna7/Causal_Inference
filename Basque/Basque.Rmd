@@ -1,0 +1,190 @@
+---
+title: "Basque"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+  library(forecast)
+  library(ggplot2)
+  library(dplyr)
+  library(stargazer)
+  library(ggplot2)
+  library(data.table)
+  library(tableone)
+  library(lattice)
+  library(MESS)
+  library(pwr)
+  library(rcompanion)
+  library(scales)
+  library(plm)
+  library(readxl)
+  library(MatchIt)
+  library(lfe)
+  library(Synth)
+  library(gsynth)
+  library(panelView)
+```
+
+
+## Understanding data and the process generation
+
+Understanding the influence of conflicts on economy of a country or region is important. Various parties would be impacted and hence interested in knowing what are the consequences of a conflict occuring in a region starting from local business, government, trades, political affaris, etc. To truly estimate the impact of an event on a society, random experiment is the best method. But since it would be impractical to conduct an conflict with heavy stakes, causal analysis with data is the next best shot. With this as a motivation, Alberto Abadie and Javier Gardeazabal studied the influence of terrorism on economic factors of Basque county, an autonomous region in Spain along with the help of other regions in Spain. Some facts about the data are:
+  + Dataset contains information from year 1955 - 1997
+  + Information about 17 Spanish regions is available
+
+## Experimental Design:
+
+
+
+```{r}
+# EDA
+
+length(unique(basque$regionname))
+
+```
+
+```{r}
+data(basque)
+```
+
+
+
+# Data munging:
+
+```{r}
+
+unused <- c("regionno", "sec.agriculture", "sec.energy" , "sec.industry" , "sec.construction" , 
+           "sec.services.venta" , "sec.services.nonventa", "school.illit", "school.prim", 
+           "school.med", "school.high", "school.post.high", "popdens", "invest")
+
+basq_clean <- basque[,!(names(basque) %in% unused)]
+
+basq_clean <- basq_clean %>%
+  mutate(post = ifelse(year > 1975, 1, 0),
+         treat = ifelse(regionname == "Basque Country (Pais Vasco)", 1, 0),
+         regionname = as.factor(regionname))
+```
+
+
+
+To estimate the impact of occurence of conflict on economic factors of the country, there are several techiques available.
+
+
+
+
+
+# Fixed effects
+
+```{r}
+
+
+within <- plm(data=basq_clean, gdpcap ~ treat ,index=c("regionname"),effect="individual",model="random", 
+              random.method="walhus")
+
+within <- plm(data=basq_clean, gdpcap ~ treat ,index=c("regionname"),effect="individual",model="random", 
+              random.method="walhus")
+
+
+
+summary(within)
+
+table(basq_clean$treat)
+
+```
+
+
+# Difference in Difference
+
+Difference in difference is a technique which would be followed if the treatment and control groups have parallel trends of the target vairable in the pre period. In this dataset, we have a lot of control regions that could potentially have the same trend on gdp as Basque. First, we identify which region has the most similar trend to Basque. To acheive that, we first take the % difference in GDP from Basque and all other regions for each year. Then, we compute the variance of the % difference in GDP across year for each region. By doing this, we know that the region with the lowest variance would have the most similar trend with Basque. We will also validate this assumption by plotting the trends of both treatment and control groups.
+
+```{r}
+
+#Picking the closest control group based on gdp
+
+pre <- basq_clean %>%
+  filter(post == 0) %>%
+  left_join(select(basq_clean[basq_clean$post==0 & basq_clean$treat == 1, ], gdpcap, year),
+            by = c("year"= 'year')) %>%
+  mutate(perc_diff = (gdpcap.y - gdpcap.x) / gdpcap.y) %>%
+  group_by(regionname) %>%
+  summarise(gdp_var = abs(var(perc_diff))) %>%
+  arrange(gdp_var)
+
+# 
+head(pre, 3)
+
+# Validating assumption
+
+did_data <- basq_clean %>%
+  filter(regionname %in% c("Basque Country (Pais Vasco)", "Cataluna"))
+
+ggplot(did_data)
+
+ggplot(did_data, aes(x=year, y=gdpcap, group = regionname)) +
+  geom_line(aes(color = regionname)) + 
+  theme_classic() +
+  ylab("GDP") + xlab("Years") + 
+  ggtitle("GDP ") +
+  geom_vline(xintercept=1975, color = "blue")
+
+
+```
+*Interpretation*:
+Form the results of the regional variance, we can clearly see Cataluna has the most similar trend with Basque. And by plotting the GDP trend for both the groups, we can clearly see how Cataluna goes hand in hand with Basque's trend although there is a slight change during some years. Thus, it is eveident that Cataluna is the apt control group for Basque.
+
+## Did 2
+Now that we know the treatment and control, there is an interest to see what the first difference estimate is. First difference estimate is the change in gdp from pre and post period within basque itself. It would give us an idea of the impact of GDP after the pre-period although it could be because of various external factors apart from terrorist conflict.
+
+```{r}
+
+# Calculating first differences
+
+basq_fdid <- did_data %>%
+  filter(treat == 1)
+
+f_did <- lm(data = basq_fdid, gdpcap ~ post)
+stargazer(f_did, type="text")
+
+```
+*Interpretation:*
+According to the results from linear regression, we can see that being in the post period after the terrorist conflict will result in increase of gdp by 2.484 units. Here, the model is not able to pick the dip in gdp right after the treatment year and since the overall trend is still increasing, the estimate tendds to be positive. This result cannot be trusted and attributed to the terrorist conflict as there would be lot of external factors in play as mentioned earlier.
+
+
+##  Difference in differences:
+
+Since it is inaccurate to consider only Basque's data and test for the impact of terorist conflicts, we use the control group and estimate what's the change in gdp for the treatment group in comparison with the control groups.
+
+
+```{r}
+
+did <- lm(data = did_data, gdpcap ~ treat*post)
+
+
+stargazer(did, type="text")
+
+```
+*Interpretation:*
+The interaction variable's estimate is the important value here. This value explains what happens to GDP when the region is being treated and being in post period. Now this beta value suggests that the the gdp infact goes down by 0.855 units when such an event happens. This value can be attributed to infer the causal relationship of terror conflict on the region's GDP. Thus, we can conclude that the terror conflict in Basque caused its GDP to go down by 0.85 units.
+
+## Synthetic Control:
+
+```{r}
+
+panelView(gdpcap~treat, data=basq_clean,index=c("regionname","year"),na.rm=TRUE,outcome.type="continuous",treatment=TRUE)
+
+gsynth(formula = gdpcap ~ treat)
+
+out <- gsynth(formula=gdpcap ~ treat, data = basq_clean,
+              index = c("regionname","year"), force = "two-way",inference="parametric",
+              CV = TRUE, se = TRUE, r = c(0,6),nboots=60, min.T0=12, parallel=TRUE,cores=8,na.rm=FALSE)
+out
+
+
+```
+
+
+
+
+
+
+

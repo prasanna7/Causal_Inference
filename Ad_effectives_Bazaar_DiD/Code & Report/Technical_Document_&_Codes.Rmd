@@ -1,0 +1,227 @@
+---
+title: "6440 - Homework 2 - Bazaar"
+author: "Prasanna Rajendran, Divya Upadhyay, Keming Hu, Wade Wimer, Meng (Julius) Yang"
+date: "February 26, 2019"
+output:
+  pdf_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+---
+
+
+## Executive Summary:
+
+Our team investigated the ROI from Bazaar's sponsored online advertisements appearing after branded keyword searches on Google, Bing, Yahoo, and Ask.com. The in-house marketing analytics team claimed that their ad spend resulted in an ROI of 320%, but after reviewing the manner in which the team calculated this return and the corresponding data, our team discovered that this estimation inappropriately claimed that all purchases from branded keyword searches were caused by sponsored ads rather than the portion of individuals that were specifically influenced to purchase because of the ads.
+
+Our team made it our mission to find the ROI specifically from these individuals influenced to make purchases due to the sponsored ads. In order to determine this, we used purchasing data from Google and used online customer conversions and their purchase value when no sponsored ads were running as compared to the same conversions and value when sponsored ads were running. To make sure we minimized any outside influence of purchase behavior between these two time periods, we used the purchase behaviors from Bing, Yahoo, and Ask.com as a collective control group. These sites had sponsored ads running continuously and did not show any significant change in conversions between the two time periods compared, so we assumed that the only change in purchases between the two Google groups were due to the presence or absence of sponsored ads.
+
+After performing a difference-in-difference analysis on the data, it was found that an about 11.4% decrease in site traffic was the result of the removal of sponsored ads on Google. After taking this into account and applying a more accurate ROI calculation than that completed by the Bazaar marketing analytics team, it was determined that the ROI is closer to 137% rather than 320%. While this amount is not nearly as high as the original calculation, it has be benefit of both making intuitive sense and being closer to industry averages, which is said to be an ROI of around 100%. This means that Bazaar can confidently continue to run these ads and look into expanding sponsored ads to other channels. For example, the firm can explore running ads on competitor branded searches or on non-branded searches within the same search engine sites, provided Bazaar is not already proceeded down this path.
+
+## Introduction:
+
+Bazaar is a leading US online retailer with a robust online advertising presence through searches on Google, Bing, Yahoo, and Ask.com. Academic research shows significant evidence that sponsored search advertisements show a significantly higher profit than those without when compared to organic searches. Senior marketing analytics team members from the firm have recently investigated the ROI for their sponsored search advertising on branded keywords, and by comparing advertising spend and average margin per conversion, they found find an ROI of about 320%.
+
+This value is suspicious for several reasons and the experiment
+
+* First, the return is so much higher than the reported average. According to reports from Google AdWords, the average expected return is two dollars for every dollar spent, translating to an ROI of 100%, which is significantly less than the ROI found by Bazaar.
+
+Source: https://www.bluecorona.com/blog/pay-per-click-statistics
+
+* In addition, the marketing team members recognize that by sponsoring ads on searches that are branded, they are not accounting for the endogeneity of the fact that many of the individuals performing the searches likely already intend to make a purchase on the website, possibly making any sponsored ad unnecessary.
+
+* Third, the team did not emphasize the added value of a customer that purchases organically rather than through the cost of clicking the advertisement. According to the case, average revenue of an individual that clicks an ad is $2.52 - $0.6 = $1.92, in which $0.6 is the cost of the ad. The average revenue of an organic conversion is just $2.52, since there is no click cost, making organic customers $0.6/$1.92 or 31.3% more profitable than customers that click the ad. On the other hand, the marketing team also mention that without sponsored ads, competitors may place their ads on the searches, which may lead to a loss of some customers.
+
+* Myra talks about the fact that if a customer includes "Bazaar" keyword in his/hear search words, chances are he will land on Bazaar.com website by clicking on organic links despite absence of sponsored ads. This statement has an underlying assumption that when a product is being searched on the website, the relevant organic ads will show up as the top results or in a position that is captivating for the user to click on the ad. We think that placement and position of organic ads on Google could affect the click through rate, which could be mis-interpreted as effect of absence of sponsored ads. We would like to raise caution here, to evaluate the search engine's organic ad placement strategy. If the strategy is same before and after the treatment was applied in week 9, then it is likely that organic ad placement is not be a confounder.
+
+* Bob considered all site traffic, both inorganic and organic, as caused by sponsored ads. Instead, only about 20% of Bazaar.com traffic for the branded keywords is the result of ads clicked. While some organic visits may be due to ad influence, the ads could not have influenced all of the organic traffic.
+
+We know that average cost per click for a sponsored click is $0.60, hence given that only 20% customers click on sponsored ads, average cost per sponsored ad click will be $0.60  $0.20 = $0.12. Now coming to revenue made, given that there is 12% probability of purchase after landing on Bazaar.com and $21 margin earned on each purchase, average revenue per click will remain the same as calculated by Bob, since the conversion probability of sponsored ads and organic ads hasn't been specified separately. Hence, 12% will be the best estimate for conversion chances associated with the customers clicking on sponsored ads.
+
+From the cost and revenue calculation above, Bob's calculation did not distinguish between the cost per click for sponsored ads from organic ads, and that lead to overestimation of cost. Bob used $0.60 as the average cost per click, however considering only 20% customer click on sponsored ads while rest 80% clicked on organic ads, the right value for average cost per click should consider it as well.
+
+We also would like to point out that, the revenue calculation should ideally consider the conversion percentage (probability of purchase) associated to customers who have landed on the website through clicking on sponsored ads. Since Bob mentions 12% as the overall conversion rate (including both organic and sponsored channels), we do not have any other source to determine the true revenue associated with sponsored ads.
+
+By happenstance, for the last three weeks, the Google sponsored ads have not run due to a glitch in the system. The marketing team decided to use this glitch to attempt to find an unbiased causal relationship between the affect of sponsored advertising on customer conversion through branded keyword searches.This report provides a description of the design, implementation, and results of an exploration of this causal relationship ultimately translated into an estimated ROI for the ads.
+
+## Experimental Design:
+We utilized the Google data to compare Bazaar site traffic when the sponsored ads were running to the three weeks when the ads were not. 
+This comparison was used to identify the accurate estimate of impact and ROI of sponsored search ads. The weekly total traffic is treated as unit of analysis, and since the sponsorship ads were not run on Google, traffic data from this site was assigned as the treatment group. Search engine traffic data from the other three search engine sites, which did not see a change in sponsored ads were assigned collectively as the control group. The experiment was the stopping of the sponsorship ads and to find the effect of this impact on site traffic.
+
+## Approach:
+ 
+ To figure out the real effect on Bazaar website traffic resulted from sponsored ads in Google, Difference in Difference analysis was conducted to achieve the goal in our analysis. And the process of our experiments went through the following  steps:
+
+1) Calculating first difference for Google total traffic between before and after the stoppage of sponsored ads on Google, to see the raw effects on traffic from sponsored ads (before:week 1-9, after:week 10-12)
+
+2) Deriving Difference in Difference by comparing the differences of two experimental groups between before and after the stoppage of sponsored ads on Google to detect the real incremental click amounts contributed by sponsored ads after removing influences from possible confounding factors.
+
+```{r echo=FALSE, warning=FALSE}
+# Importing necessary packages
+suppressPackageStartupMessages({
+  library(TSA)
+  library(forecast)
+  library(ggplot2)
+  library(dplyr)
+  library(stargazer)
+  library(ggplot2)
+  library(data.table)
+  library(tableone)
+  library(lattice)
+  library(MESS)
+  library(pwr)
+  library(rcompanion)
+  library(scales)
+  library(plm)
+  library(readxl)
+  library(MatchIt)
+  library(lfe)
+})
+```
+
+### Reading the dataframe:
+
+```{r}
+# reading the dataframe
+df <- as.data.frame(
+  fread('/01 Drive/UMinn/Spring/Data-Driven Exp/Homeworks/HW2/did_sponsored_ads.csv'))
+
+df$treated <- ifelse(df$search_engine == 'goog', 1, 0)
+df$after <- ifelse(df$week >= 10, 1, 0)
+
+```
+
+## Impact within Google:
+
+First, we would like to calculate the impact in total traffic between pre-period and post-period for Google only. To find this impact we would like to use First difference on Google traffic which would give the estimate of  pre-post difference in only the treated cohort. For the first difference equation, we will use the log function to find the estimate of the impact as it would return the estimate in  percentage change after having the treatment which will be easier for us to interpret.
+
+```{r warning = FALSE}
+
+MyData1 <- df[df$search_engine == "goog",]
+ols <- lm(data = MyData1, tot_traffic ~ after)
+ols_log <- lm(data = MyData1, log(tot_traffic) ~ after)
+#summary(ols)
+#summary(ols_log)
+stargazer(ols,ols_log,column.labels = c("True","Log"), type="text")
+
+```
+**Intepretation**
+By using the log function, the coefficient of the model returns the percentage change after having the treatment, that is 16.2% decreasing in total traffic from Google website.  Since after week 10, there is no sponsor ads on Google website, this value (16.2%) also indicates that the 16.2% decreasing in total traffic was caused by the sponsor ads disappearing. It isn't a good idea to solely rely on this number as our average treatment effect because there could be other factors influencing the target variable of the  treatment effect at the same time, for example, there could be industry wide changes happening like government introducing new policy on certain aspects of online advertising or the users in general could start having an aversion towards using Bazaar as their website for online advertising, maybe because of poor service or lawsuits against Bazaar. These industry or company wide changes would cause the entire number of clicks to go down and thus, we can't solely attribute the number we calculated from first differencing as the average treatment effect. This calls for using a control group having similar trend to adjust for the external factors. Comparing with the control groups would allow us to find the change that is happening all across the industry or company and estimate the actual average treatment effect. Since we have data from Bing, ask and yahoo, we can use these search engines as our control group.
+
+
+## Validating parallel trends assumption:
+
+To find how much effect does the treatment of stopping sponsored ads on Google has, we would like to perform Difference in Difference. One property of Difference in Difference is that the treatment and the control group has to have parallel trends of target variable in the pre-period. So we would like to plot the total clicks for treatment and control group to validate this assumption. If the assumption does not hold true, we would not be able to continue with the difference in difference methodology to estimate the effect of treatment. 
+
+```{r}
+
+ggplot(df, aes(x=factor(week), y=tot_traffic, group = search_engine)) +
+  geom_line(aes(color = search_engine)) + 
+  theme_classic() +
+  ylab("Total Traffic") + xlab("Weeks") + 
+  ggtitle("Distribution of impressions across channels") +
+  geom_vline(xintercept=9.5, color = "blue")
+
+```
+
+We can see that the both the treatment and the control groups have similar trends in the pre-period. This validates the assumption made by Difference in difference method. So we can safely continue with this algorithm to estimate the treatment effect.
+
+
+## Average Treatment Effect:
+
+### 4.1 Basic DiD
+
+Here, we would do a basic difference in difference analysis to remove the confounding effects. Here, Google would be set as the treatment group and all other search engines are control group. And we would regress total traffic on treated(0,1), after(0,1), and also the interaction: of these two variables. The estimate from the interaction term would give us the average treatment effect.
+
+```{r warning = FALSE}
+
+did_basic <- lm(data = df,tot_traffic~ treated*after)
+did_log_basic <- lm(data=df,log(tot_traffic+1)~treated*after)
+
+stargazer(did_basic,did_log_basic,title="DiD Estimates",column.labels=c("Total Traffic", "Log(Total Traffic)"),type="text")
+```
+
+**Interpretation**
+For easy interpretation of impact in terms of %, we will use the model with log(total traffic). As we can see, after removing confounding effects by doing DiD, the decreasing in total traffic of Google declines by 5% to arrive at an actual decline of 11.4 %. Meaning that not all traffic declines in first difference resulted from the stoppage of Google sponsored ads and the 11% decline is the true average treatment effect.
+
+
+### 4.2 DiD with fixed effect
+Replacing the treatment dummy with group- and time-fixed effects to see changes on their coefficients. Doing DiD with fixed effect would help avoid effects from possible omitted time-invariant and time-specific variables.
+
+```{r warning = FALSE}
+did_fe <- felm(data = df,tot_traffic~ treated*after|search_engine)
+did_sfe_tfe <- felm(data = df,tot_traffic~ treated*after|week + search_engine)
+did_log_sfe_tfe <- felm(data = df,log(tot_traffic + 1)~ treated*after|week+search_engine)
+
+stargazer(did_fe,did_sfe_tfe,did_log_sfe_tfe,type="text",title="DiD + Time & Subject FEs",column.labels = c("Subject FEs","Subject + Time FEs","Log Subject + Time FEs"))
+
+```
+**Interpretation**
+The result is no different with that of basic DiD, therefore not much influences resulted from time and group-specific factors.
+
+
+### 4.3 Placebo test
+Since the effectiveness of DiD depends on the assumption that treatment and control group hold constant parallel relationship. Thus, we choose to do placebo test to test this assumption.
+
+```{r warning = FALSE}
+
+dfPre <- df[df$after==0,]
+dfPre$week <- is.numeric(dfPre$week)
+dfPre$after <- dfPre$week > 6
+did_basic_placebo <- lm(data=dfPre,tot_traffic~ treated*after)
+did_log_basic_placebo <- lm(data=dfPre,log(tot_traffic+1)~treated*after)
+stargazer(did_basic_placebo,did_log_basic_placebo,title="DiD Estimates",column.labels=c("Total traffic", "Log(Total traffic)"),type="text")
+
+```
+
+**Interpretation**
+As we could see from the table, there is no coefficient of after and treated:after. This is significant evidence that that they are parallel. However, the choice of the placebo timing is arbitrary, which is one limitation for this test.
+
+So we can conclude that the 11.4% decline in total clicks is the average treatment effect of the removal of sponsored ads on Google.
+
+
+## ROI Analysis
+Now that we have found the impact of sponsorship ads and their conversion, we would like to find out how much in reality are the sponsorship ads effective in terms of dollars. Since we know the average treatment effect of the sponsorship ads in % and the average total clicks per week in the pre period, the total decline in number of clicks (average treatment effect in clicks) would be 11.4% of the average clicks in the pre-period. This also helps in supporting why Bob was wrong in calculating the ROI his way.
+
+
+```{r}
+# finding mean of sponsorship clicks in the pre period
+spons_mean <- mean(df[df$search_engine == "goog" & df$week < 10 ,]$avg_spons)
+
+# finding mean of total clicks in the pre period
+tot_mean <- mean(df[df$search_engine == "goog" & df$week < 10 ,]$tot_traffic)
+
+# Average treatment effect in clicks
+ate_affect <- 0.113 * tot_mean
+
+cpc <- 0.6         # cost per click
+pur_prop <- 0.12   # probability of making a purchase
+cust_revenue <- 21 # revenue generated per purchase
+
+# calculating total cost and revenue
+total_cost <- spons_mean * cpc
+total_revenue <- ate_affect * pur_prop * cust_revenue
+
+roi <- (total_revenue - total_cost) / total_cost
+roi*100
+
+```
+
+From the above module, we can see that the actual ROI from the sponsorship ads were just 137% which is much lesser than the value Bob had calculated. Since the ROI number is still above the break even point, Bazaar has no problems in investing on sponsorship ads and could continue to invest as before.
+
+## Conclusion:
+Based on the evaluation the experimental design and statistical analysis of data, we can conclude following inferences from the results of this experiment:
+1) First difference estimate using pre-post difference in treated group captures the percentage change in web traffic arriving from Google, which shows an effect on website traffic bringing from sponsored ads. However, the effect is not accurate, because the decreasing percentage change can be influenced by the whole industry or company wide changes. we can't solely attribute the number we calculated from first differencing as the average treatment effect.
+2) To capture the average treatment effect, we consider other search engine including Bing, Yahoo, and Ask as control group to run difference in difference regression. The new estimate give us the true average treatment effect which is 11% decline. In other words, 11% is the real incremental click amounts contributed by sponsored ads after removing influences from possible confounding factors. 
+3) Based on the new effect of the sponsored ads, we calculate the ROI, which is 137.25%. The new ROI helps in determining that the Bob's way of calculating ROI is wrong, and the true ROI is much lower than what he got.
+
+Utilizing these facts, we recommend that Bazaar continue utilizing sponsored ads on branded searches. In addition, placing sponsored ads on other channels may have a positive ROI as well and should be explored. Finally, we recommend that the Bazaar marketing analytics team adjust their method for calculating ROI to be closer to the method we propose.
+
+
+
+
+
