@@ -1,18 +1,31 @@
 ---
-title: "Basque"
-output: html_document
+title: "Causal Inference using Difference in Differences, Causal Impact and Synthetic Control"
+author: "Prasanna Rajendran"
+date: "March 27, 2019"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: '3'
+  word_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    toc: yes
+    toc_depth: 3
+urlcolor: blue
 ---
 
 ```{r setup, include=FALSE}
   library(forecast)
   library(ggplot2)
   library(dplyr)
+  library(tidyr)
   library(stargazer)
   library(ggplot2)
   library(data.table)
   library(tableone)
   library(lattice)
-  library(MESS)
   library(pwr)
   library(rcompanion)
   library(scales)
@@ -23,166 +36,301 @@ output: html_document
   library(Synth)
   library(gsynth)
   library(panelView)
+  library(CausalImpact)
+  library(knitr)
 ```
 
 
-## Understanding data and the process generation
+Correlation is not causation. 
 
-Understanding the influence of conflicts on economy of a country or region is important. Various parties would be impacted and hence interested in knowing what are the consequences of a conflict occuring in a region starting from local business, government, trades, political affaris, etc. To truly estimate the impact of an event on a society, random experiment is the best method. But since it would be impractical to conduct an conflict with heavy stakes, causal analysis with data is the next best shot. With this as a motivation, Alberto Abadie and Javier Gardeazabal studied the influence of terrorism on economic factors of Basque county, an autonomous region in Spain along with the help of other regions in Spain. Some facts about the data are:
-  + Dataset contains information from year 1955 - 1997
-  + Information about 17 Spanish regions is available
+Then what is causation? How can it be measured?
 
-## Experimental Design:
+Causation is measuring the real impact on Y because of X. E.g., What is the effect of ad campaigns on the sales of a product?
 
+It is critical to exactly understand the causal effects of these interventions on the subject. One of the main threats to causal inference is the confounding effect from other variables. In case of ad campaigns, it could be a reduction in price of the product, change in the overall economy or various other factors that could be inducing the change in sales at the same time. So how do we correctly attribute the change in sales because of the ad campaign?. 
 
+There are two ways to estimate the true causal impact of the intervention on the subject.
 
-```{r}
-# EDA
+  * Randomized experiment: It's the most reliable method to infer the actual causal impact of the treatment, where the user induces a change in the process at random and measure the corresponding change in the outcome variable. However, in most cases, it would be impossible to conduct experiments and control the whole system to be truly at random.
+  * Causal Inference in Econometrics: This method involves application of statistical procedures to arrive at the causal estimate while controlling for confounders. Some approaches under this method are what we'll be looking at in this analysis. The following are the approaches:
+    + Difference in Differences (DD)
+    + Causal Impact
+    + Synthetic Control
 
-length(unique(basque$regionname))
+Using the Basque dataset, we'll estimate the economic impact of terrorist conflict in the Basque country, an autonomous community in Spain, with the help of data from 17 other regions as well. The data can be found [here](https://www.rdocumentation.org/packages/Synth/versions/1.1-5/topics/basque). Let's look at some facts about the data and the experimental design.
+  
+## Data Description:
 
-```
+Some facts about the data:
 
-```{r}
+  * Dataset contains information from year 1955 - 1997
+  * Information about 18 Spanish regions is available
+    + One of which is average for the whole country of Spain (we'll remove that)
+  * The treatment year is considered to be year 1975
+  * The treatment region is "Basque Country (Pais Vasco)"
+  * The economic impact measurement variable is GDP per capita (in thousands)
+
+```{r include = FALSE}
 data(basque)
 ```
 
 
+```{r include = FALSE}
 
-# Data munging:
-
-```{r}
-
-unused <- c("regionno", "sec.agriculture", "sec.energy" , "sec.industry" , "sec.construction" , 
+unused <- c("sec.agriculture", "sec.energy" , "sec.industry" , "sec.construction" , 
            "sec.services.venta" , "sec.services.nonventa", "school.illit", "school.prim", 
-           "school.med", "school.high", "school.post.high", "popdens", "invest")
+           "school.med", "school.high", "school.post.high", "popdens")
 
 basq_clean <- basque[,!(names(basque) %in% unused)]
 
 basq_clean <- basq_clean %>%
   mutate(post = ifelse(year > 1975, 1, 0),
          treat = ifelse(regionname == "Basque Country (Pais Vasco)", 1, 0),
-         regionname = as.factor(regionname))
-```
-
-
-
-To estimate the impact of occurence of conflict on economic factors of the country, there are several techiques available.
-
-
-
-
-
-# Fixed effects
-
-```{r}
-
-
-within <- plm(data=basq_clean, gdpcap ~ treat ,index=c("regionname"),effect="individual",model="random", 
-              random.method="walhus")
-
-within <- plm(data=basq_clean, gdpcap ~ treat ,index=c("regionname"),effect="individual",model="random", 
-              random.method="walhus")
-
-
-
-summary(within)
-
-table(basq_clean$treat)
+         regionname = as.factor(regionname)) %>%
+  filter(regionno != 1)
 
 ```
 
+The analysis has been done in R and the source codes can be found in my [GitHub](https://github.com/prasanna7/Causal_Inference/tree/master/Basque). We'll get started with the approaches mentioned.
 
-# Difference in Difference
+## First Difference Estimate
 
-Difference in difference is a technique which would be followed if the treatment and control groups have parallel trends of the target vairable in the pre period. In this dataset, we have a lot of control regions that could potentially have the same trend on gdp as Basque. First, we identify which region has the most similar trend to Basque. To acheive that, we first take the % difference in GDP from Basque and all other regions for each year. Then, we compute the variance of the % difference in GDP across year for each region. By doing this, we know that the region with the lowest variance would have the most similar trend with Basque. We will also validate this assumption by plotting the trends of both treatment and control groups.
+Before going into Difference in Differences method, let's look at First Differences and what it does. Our goal here is to quantify the impact of GDP before and after the terrorist conflict in Basque country. Naively, we can actually achieve this by constructing a first difference regression and observing the estimate. Let's look at the general trend of GDP per capita for the Basque country.
 
-```{r}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Calculating first differences
+
+basq_fdid <- basq_clean %>%
+  filter(treat == 1)
+
+ggplot(basq_fdid, aes(x=year, y=gdpcap)) +
+  geom_line(color = "#F8766D") + theme_classic() +
+  geom_vline(xintercept=1975, color = "steelblue", linetype = "dashed") +
+  labs(title="GDP trend over years for Basque", 
+       y="GDP per capita",x="Years", color = "Region") +
+  annotate("text", x = 1970, y = 9, label = "Pre-period", size  =5, color = "steelblue") +
+  annotate("text", x = 1980, y = 9, label = "Post-period", size  =5, color = "steelblue") 
+```
+
+
+From the graph, we can see how the trend in GDP per capita plunges right after the terrorist intervention and then increases back all over again. Our goal is to capture the magnitude of plunge that we see. The first difference estimate will tell us the difference in GDP before and after the treatment. Let's construct a first difference equation by having GDP as the dependent variable and pre-post indicator as the independent variable. 
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+# Calculating first differences
+f_did <- lm(data = basq_fdid, gdpcap ~ post)
+stargazer(f_did, type="text")
+
+```
+
+The coefficient of post indicator suggests that there is an increase of GDP per capita by ~2.5 units being in the post period after the terrorist conflict and that's not quite what we want.
+
+That's because there's an expected problem as we mentioned earlier. The trend in GDP could have been altered because of a lot of other variables, besides the terrorist conflict, occurring at the same time - otherwise known as confounders. Possible confounders in this case are:
+
+  * Passing of a trade law which would affect local businesses and GDP
+  * Mutiny within local groups 
+  * Perception of corrupt or dysfunctional government
+
+The solution to this is to compare the trend to a control region which was not impacted by terrorist conflict. This comparison allows us to remove the confounding effect after the intervention period and arrive at the real causal impact. That's where Difference in differences helps.
+
+##  Difference in differences (DD):
+
+The underlying assumption of difference-in-differences (DD) design is that the trend of the control group provides an adequate proxy for the trend that would have been observed in the treatment group in the absence of treatment. Thus, the difference in change of slope would be the actual treatment effect. The assumption here is that there treatment group and control group must follow the same trend in the pre-period. 
+
+For this analysis, the control region was identified by spotting for the region that had the lowest variation in % difference of GDP across years between each region and Basque country. Alternatively, we can look for the control region by eyeballing the GDP trend for treatment and control groups when feasible. In this case, Cataluna region was recognized to be the best control region. Let's look at the GDP trend for test and control regions below:
+
+
+```{r echo=FALSE}
 
 #Picking the closest control group based on gdp
 
 pre <- basq_clean %>%
   filter(post == 0) %>%
-  left_join(select(basq_clean[basq_clean$post==0 & basq_clean$treat == 1, ], gdpcap, year),
+  left_join(dplyr::select(basq_clean[basq_clean$post==0 & basq_clean$treat == 1, ], gdpcap, year),
             by = c("year"= 'year')) %>%
   mutate(perc_diff = (gdpcap.y - gdpcap.x) / gdpcap.y) %>%
   group_by(regionname) %>%
   summarise(gdp_var = abs(var(perc_diff))) %>%
   arrange(gdp_var)
 
-# 
-head(pre, 3)
-
 # Validating assumption
 
 did_data <- basq_clean %>%
   filter(regionname %in% c("Basque Country (Pais Vasco)", "Cataluna"))
 
-ggplot(did_data)
 
 ggplot(did_data, aes(x=year, y=gdpcap, group = regionname)) +
   geom_line(aes(color = regionname)) + 
   theme_classic() +
-  ylab("GDP") + xlab("Years") + 
-  ggtitle("GDP ") +
-  geom_vline(xintercept=1975, color = "blue")
-
-
-```
-*Interpretation*:
-Form the results of the regional variance, we can clearly see Cataluna has the most similar trend with Basque. And by plotting the GDP trend for both the groups, we can clearly see how Cataluna goes hand in hand with Basque's trend although there is a slight change during some years. Thus, it is eveident that Cataluna is the apt control group for Basque.
-
-## Did 2
-Now that we know the treatment and control, there is an interest to see what the first difference estimate is. First difference estimate is the change in gdp from pre and post period within basque itself. It would give us an idea of the impact of GDP after the pre-period although it could be because of various external factors apart from terrorist conflict.
-
-```{r}
-
-# Calculating first differences
-
-basq_fdid <- did_data %>%
-  filter(treat == 1)
-
-f_did <- lm(data = basq_fdid, gdpcap ~ post)
-stargazer(f_did, type="text")
+  geom_vline(xintercept=1975, color = "steelblue", linetype = "dashed") +
+  labs(title="GDP trend over years for different regions", 
+       y="GDP per capita",x="Years", color = "Region") +
+  scale_color_manual(labels = c("Basque (treated)", "Cataluna (control)"), values = c("#00BFC4", "#F8766D"))
 
 ```
-*Interpretation:*
-According to the results from linear regression, we can see that being in the post period after the terrorist conflict will result in increase of gdp by 2.484 units. Here, the model is not able to pick the dip in gdp right after the treatment year and since the overall trend is still increasing, the estimate tendds to be positive. This result cannot be trusted and attributed to the terrorist conflict as there would be lot of external factors in play as mentioned earlier.
 
+GDP trend for Cataluna region goes hand in hand with Basque's GDP with an exception for a few years in the pre-period. Thus, there should be no problem in considering Cataluna to be our control region.
 
-##  Difference in differences:
+Let's go ahead and fit the regression with GDP as the dependent variable and treatment indicator and pre-post indicator as the independent variables. The key aspect here is to feed the interaction between treatment and pre-post indicator as we want the estimate to contain the effect of being treated along with being in post-period in comparison to not being treated and being in pre-period. After fitting, let's look at the regression results below:
 
-Since it is inaccurate to consider only Basque's data and test for the impact of terorist conflicts, we use the control group and estimate what's the change in gdp for the treatment group in comparison with the control groups.
-
-
-```{r}
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+# Difference in differences
 
 did <- lm(data = did_data, gdpcap ~ treat*post)
-
-
 stargazer(did, type="text")
 
 ```
-*Interpretation:*
-The interaction variable's estimate is the important value here. This value explains what happens to GDP when the region is being treated and being in post period. Now this beta value suggests that the the gdp infact goes down by 0.855 units when such an event happens. This value can be attributed to infer the causal relationship of terror conflict on the region's GDP. Thus, we can conclude that the terror conflict in Basque caused its GDP to go down by 0.85 units.
+
+Looking at the estimate of the interaction variable suggests that the GDP in Basque country reduced by 0.855 units because of the terrorist intervention that happened. Now there is a stark difference between estimates provided by First difference method and the DD method. Quantitatively, we can see how the First difference estimates could be deceiving and naive to look at. 
+
+If you're interested, you can read more about Difference in difference [here](https://www.mailman.columbia.edu/research/population-health-methods/difference-difference-estimation). For now, let's move on to other causal inference methods.
+
+## Causal Impact
+
+This is a methodology developed by Google to estimate the causal impact of a treatment in the treated group. The official documentation can be found [here](https://google.github.io/CausalImpact/CausalImpact.html).
+
+The motivation to use Causal Impact methodology is that the Difference in differences in limited in the following ways:
+
+  * DD is traditionally based on a static regression model that assumes independent and identically distributed data despite the fact that the design has a temporal component
+  * Most DD analyses only consider two time points: before and after the intervention. In practice, we also have to consider the manner in which an effect evolves over time, especially its onset and decay structure
+
+The idea here is to use the trend in the control group to forecast the trend in the treated group which would be the trend if the treatment had not happened. Then the actual causal estimate would be the difference in the actual trend vs the counter-factual trend of the treated group that we predicted. Causal Impact uses Bayesian structural time-series models to explain the temporal evolution of an observed outcome. Essentially, Causal Impact methodology is very close to the Synthetic control methodology we are going to see next. 
+
+Control region in this case is considered to be Cataluna again. With the treated and control region's GDP in place, let's feed them to the Causal Impact function in R and look at the results.
+
+```{r echo=FALSE}
+# Causal Impact
+
+basq_CI <- basq_clean %>%
+  filter(regionname %in% c("Basque Country (Pais Vasco)", "Cataluna")) %>%
+  mutate(date = as.Date(paste0(year, "-01", "-01"), format = "%Y-%m-%d")) %>% 
+  dplyr::select(date, regionname, gdpcap) %>%
+  spread(regionname, gdpcap)
+
+names(basq_CI) <- c("date", "Basque", "another")
+
+pre.period <- as.Date(c("1955-01-01", "1975-01-01"))
+post.period <- as.Date(c("1976-01-01", "1997-01-01"))
+
+impact <- CausalImpact(basq_CI, pre.period, post.period)
+summary(impact)
+
+```
+
+The Absolute effect is the difference in GDP per capita between what the actual GDP was after the treatment and what the GDP would have been if the treatment had not occurred. From the results, we can see the absolute effect gives us a value of -0.76 which means that the GDP per capita reduced by 0.76 units i.e. 8.8% because of the terrorist conflict that happened in Basque country. This is almost equal to what we saw using Difference in Differences method. For those interested about Causal Impact, an exhaustive explanation of the method is given by the authors of this method that can be found [here](https://storage.googleapis.com/pub-tools-public-publication-data/pdf/41854.pdf).
 
 ## Synthetic Control:
 
-```{r}
+Synthetic control is a technique which is very similar to Causal Impact in estimating the true impact of a treatment. Both the methods use the help of control groups to construct a counter-factual of the treated group giving us as idea of what the trend is if the treatment had not happened. The counter-factual GDP of the treated group would be predicted by the GDP of the control groups and also other possible covariates in the control group. The synth algorithm predicts the counter-factual by assigning weights to the regressors in the control groups which is helpful in identifying individual regressors and their influence in prediction. Ultimately, the true causal impact is the difference in GDP between actual GDP and the counter-factual GDP if the treatment had not happened. 
 
-panelView(gdpcap~treat, data=basq_clean,index=c("regionname","year"),na.rm=TRUE,outcome.type="continuous",treatment=TRUE)
+The difference between Synthetic Control and Causal Impact is that Synthetic Control uses only pre-treatment variables for matching while Causal Impact uses the full pre and post-treatment time series of predictor variables for matching. Let's look at a plot for GDP trend in all the 17 other regions in the data.
 
-gsynth(formula = gdpcap ~ treat)
 
-out <- gsynth(formula=gdpcap ~ treat, data = basq_clean,
-              index = c("regionname","year"), force = "two-way",inference="parametric",
-              CV = TRUE, se = TRUE, r = c(0,6),nboots=60, min.T0=12, parallel=TRUE,cores=8,na.rm=FALSE)
-out
+```{r echo=FALSE}
 
+basq_synth <- basq_clean %>%
+  rename(Y = gdpcap) %>%
+  mutate(regionname = as.character(regionname))
+
+ggplot(basq_synth, aes(x=year,y=Y,group=regionno)) +
+  geom_line(aes(color=as.factor(treat), size=as.factor(treat))) + 
+  geom_vline(xintercept=1975,linetype="dashed", color = "steelblue") + theme_classic() + 
+  labs(title="GDP trend over years for all regions", 
+       y="GDP per capita",x="Years", color = "Treatment group") +
+  scale_color_manual(labels = c("Control", "Treated"), values = c("#F8766D", "#00BFC4")) +
+  scale_size_manual(values = c(0.5,1.5), guide = 'none')
 
 ```
 
 
+As seen from the plot above, all the control regions have a similar upward trend in GDP as Basque country's in the pre-period. This suggests that GDP in Basque could be constructed fairly accurately using the data from other regions.
+
+The implementation of synthetic control on this problem statement has already been given in the official documentation of the package found [here](https://cran.r-project.org/web/packages/Synth/Synth.pdf).
+
+
+```{r message=FALSE, warning=TRUE, include=FALSE, echo=FALSE}
+# synth
+dataprep.out <-
+  dataprep(
+  foo = basque
+  ,predictors= c("school.illit",
+                 "school.prim",
+                 "school.med",
+                 "school.high",
+                 "school.post.high"
+                 ,"invest"
+                 )
+   ,predictors.op = c("mean")
+   ,dependent     = c("gdpcap")
+   ,unit.variable = c("regionno")
+   ,time.variable = c("year")
+   ,special.predictors = list(
+    list("gdpcap",1960:1969,c("mean")),                            
+    list("sec.agriculture",seq(1961,1969,2),c("mean")),
+    list("sec.energy",seq(1961,1969,2),c("mean")),
+    list("sec.industry",seq(1961,1969,2),c("mean")),
+    list("sec.construction",seq(1961,1969,2),c("mean")),
+    list("sec.services.venta",seq(1961,1969,2),c("mean")),
+    list("sec.services.nonventa",seq(1961,1969,2),c("mean")),
+    list("popdens",1969,c("mean")))
+    ,treatment.identifier  = 17
+    ,controls.identifier   = c(2:16,18)
+    ,time.predictors.prior = c(1964:1969)
+    ,time.optimize.ssr     = c(1960:1969)
+    ,unit.names.variable   = c("regionname")
+    ,time.plot            = c(1955:1997) 
+    )
+synth.out = synth(dataprep.out)
+
+```
+
+After execution, Let's look at the plot between actual GDP and the counter-factual GDP. 
+
+``` {r echo=FALSE}
+# Two native plotting functions.
+# Path.plot() plots the synthetic against the actual treated unit data.
+path.plot(dataprep.res = dataprep.out, synth.res = synth.out,Xlab="Year",Ylab="GDP Per Capita")
+abline(v=1975,lty=2,col="steelblue")
+title("Actual vs Synthetic GDP for Basque")
+
+
+# Gaps.plot() shows the deviation between the synthetic and the actual over time.
+#gaps.plot(dataprep.res = dataprep.out, synth.res = synth.out,Xlab="Year",Ylab="Diff in GDP Per Capita")
+#abline(v=1975,lty=2,col="red")
+
+```
+
+
+The path-graph shows how the smooth relationship is between the synthetic and actual trend in the pre-period and how it deviates gradually once the treatment happens. That difference in trends in the post-period would be our average treatment effect.
+
+The root mean squared error of the Actual and Synthetic trends were found to be 0.57 units.
+
+```{r include=FALSE}
+# Calculating root mean squared error between actual and synthetic
+
+round(sqrt(mean((dataprep.out$Y1plot - (dataprep.out$Y0plot %*% synth.out$solution.w))^2)), 2)
+
+```
+
+We can conclude that the true causal impact of terrorist conflict on Basque country is reduction of GDP by 0.57 units calculated using Synthetic control method.
+
+Let's look at the comparison of results from all three methods below:
+
+```{r echo=FALSE}
+
+labels <- c("DiD", "Causal Impact", "Synthetic Control")
+values <- c(-0.85, -0.76, -0.57)
+values_df <- data.frame(labels,values)
+names(values_df) <- c("Method", "Change in GDP per captia")
+kable(values_df)
+
+```
+
+
+The magnitude of the causal impact differs only by a small margin between the three methods and there is no method which will give us the "correct answer". Most times, the approaches we use will be restricted by the nature of the experiment and what causal threats we are trying to address. 
+
+Some other techniques useful for inferring causal impact are [Propensity score Matching](https://www.statisticshowto.datasciencecentral.com/propensity-score-matching/), [Fixed Effects Regression](https://www.statisticshowto.datasciencecentral.com/experimental-design/fixed-effects-random-mixed-omitted-variable-bias/), [Instrumental variables](https://www.statisticshowto.datasciencecentral.com/instrumental-variable/) and [Regression Discontinuity](https://www.socialresearchmethods.net/kb/quasird.htm).
 
 
 
